@@ -137,6 +137,12 @@ def test_basic_functionality():
         # Wait for 10 seconds to observe the logged-in state
         time.sleep(10)
 
+
+        # Display results        print("\nTest Results:")
+        print(f"\nSavers login: 2FA duration = {savers_duration_2FA:.3f}s, final navigation duration = {savers_duration_final:.3f}s")
+        print(f"EMP login: navigation duration = {emp_duration:.3f}s")
+        print(f"Agents login: navigation duration = {agent_duration:.3f}s")
+
         # Close the browser
         print("Closing browser...")
         browser.close()
