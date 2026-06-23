@@ -1,4 +1,3 @@
-from pdb import main
 import time
 
 def get_element_by_id(page, element_id):

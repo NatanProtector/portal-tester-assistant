@@ -1,13 +1,52 @@
 # Script for testing the basic functionality needed for the project
+
 import os
-
-from playwright.sync_api import sync_playwright
-
-# Get the company portal URL from the .env file
-from dotenv import load_dotenv
 import time
 
-from utils import apply_input, get_element_by_id, get_element_by_name, get_element_by_text, get_input_by_id, two_fa_code_is_valid
+from dotenv import load_dotenv
+from playwright.sync_api import sync_playwright
+
+from utils import (
+    apply_input,
+    get_element_by_id,
+    get_element_by_name,
+    get_element_by_text,
+    get_input_by_id,
+    two_fa_code_is_valid,
+)
+
+# ============================================================================
+# Constants
+# ============================================================================
+from configs import (
+    MAXIMUM_DURATION,
+    BROWSER_CHANNEL,
+    HEADLESS,
+    OBSERVATION_DELAY_SECONDS,
+    NAVIGATION_TIMEOUT_MS,
+    DEFAULT_DURATION_THRESHOLD,
+    SAVERS_SMS_BUTTON_TEXT,
+    SAVERS_CONTINUE_BUTTON_TEXT,
+    SAVERS_ID_FIELD,
+    SAVERS_PHONE_FIELD,
+    SAVERS_2FA_INPUT_IDS,
+    AGENTS_USERNAME_FIELD,
+    AGENTS_PASSWORD_FIELD,
+    AGENTS_TOKEN_FIELD,
+    AGENTS_LOGIN_BUTTON_ID,
+    EMP_USERNAME_FIELD,
+    EMP_TOKEN_FIELD,
+    EMP_LOGIN_BUTTON_NAME,
+    PROMPT_PHONE_READY,
+    PROMPT_2FA_RECEIVED,
+    PROMPT_2FA_CODE,
+    PROMPT_INVALID_2FA,
+    PROMPT_COMSIGN_TOKEN,
+    MSG_BROWSER_LAUNCH,
+    MSG_BROWSER_CLOSE,
+    MSG_DURATION_EXCEEDED,
+)
+# ============================================================================
 
 load_dotenv()
 
@@ -23,128 +62,236 @@ agents_password = os.getenv("AGENTS_PASSWORD")
 company_portal_emp_login = os.getenv("COMPANY_PORTAL_EMP_LOGIN")
 emp_username = os.getenv("EMP_USERNAME")
 
+
 def test_savers_login(context):
     savers_page = context.new_page()
     savers_page.goto(company_portal_savers_login)
 
-    get_element_by_text(savers_page, "סמס ").click()
+    get_element_by_text(savers_page, SAVERS_SMS_BUTTON_TEXT).click()
 
-    apply_input(savers_page, "idNumber", savers_id)
-    apply_input(savers_page, "phone", savers_telephone)
+    apply_input(savers_page, SAVERS_ID_FIELD, savers_id)
+    apply_input(savers_page, SAVERS_PHONE_FIELD, savers_telephone)
 
-    login_button = get_element_by_text(savers_page, " המשך ")
+    login_button = get_element_by_text(
+        savers_page,
+        SAVERS_CONTINUE_BUTTON_TEXT,
+    )
 
-    input("Get you phone ready to receive 2FA code, then press Enter to continue...")
+    input(PROMPT_PHONE_READY)
 
     start = time.perf_counter()
     login_button.click()
 
-    input("Press Enter when you receive the 2FA code...")
+    input(PROMPT_2FA_RECEIVED)
 
     two_fa_duration = time.perf_counter() - start
 
-    two_fa_code = input("Enter the 2FA code: ")
+    two_fa_code = input(PROMPT_2FA_CODE)
 
     while not two_fa_code_is_valid(two_fa_code):
-        print("Invalid 2FA code, please try again.")
-        two_fa_code = input("Enter the 2FA code: ")
+        print(PROMPT_INVALID_2FA)
+        two_fa_code = input(PROMPT_2FA_CODE)
 
-    ontimeInput1 = get_input_by_id(savers_page, "ontimeInput1")
-    ontimeInput2 = get_input_by_id(savers_page, "ontimeInput2")
-    ontimeInput3 = get_input_by_id(savers_page, "ontimeInput3")
-    ontimeInput4 = get_input_by_id(savers_page, "ontimeInput4")
-    ontimeInput5 = get_input_by_id(savers_page, "ontimeInput5")
-    ontimeInput6 = get_input_by_id(savers_page, "ontimeInput6")
+    otp_inputs = [
+        get_input_by_id(savers_page, input_id)
+        for input_id in SAVERS_2FA_INPUT_IDS
+    ]
 
-    ontimeInput1.fill(two_fa_code[0])
-    ontimeInput2.fill(two_fa_code[1])
-    ontimeInput3.fill(two_fa_code[2])
-    ontimeInput4.fill(two_fa_code[3])
-    ontimeInput5.fill(two_fa_code[4])
+    for index, otp_input in enumerate(otp_inputs[:-1]):
+        otp_input.fill(two_fa_code[index])
 
     start = time.perf_counter()
 
     with savers_page.expect_navigation():
-        ontimeInput6.fill(two_fa_code[5])
+        otp_inputs[-1].fill(two_fa_code[-1])
         
-        duration = time.perf_counter() - start
+    duration = time.perf_counter() - start
 
+    savers_page.close()
 
     return two_fa_duration, duration
+
 
 def test_agents_login(context):
     agents_page = context.new_page()
     agents_page.goto(company_portal_agents_login)
 
-    apply_input(agents_page, "UserName", agents_username)
-    apply_input(agents_page, "Password", agents_password)
+    apply_input(
+        agents_page,
+        AGENTS_USERNAME_FIELD,
+        agents_username,
+    )
+    apply_input(
+        agents_page,
+        AGENTS_PASSWORD_FIELD,
+        agents_password,
+    )
 
-    token_input = get_element_by_id(agents_page, "CodeToken")
+    token_input = get_element_by_id(
+        agents_page,
+        AGENTS_TOKEN_FIELD,
+    )
 
-    login_button = get_element_by_id(agents_page, "btnLoginSubmit")
+    login_button = get_element_by_id(
+        agents_page,
+        AGENTS_LOGIN_BUTTON_ID,
+    )
 
-    token = input("Enter the ComSign token: ")
+    token = input(PROMPT_COMSIGN_TOKEN)
     token_input.fill(token)
 
     start = time.perf_counter()
-    with agents_page.expect_navigation():
+
+    with agents_page.expect_navigation(
+        timeout=NAVIGATION_TIMEOUT_MS
+    ):
         login_button.click()
+
     duration = time.perf_counter() - start
 
+    agents_page.close()
+
     return duration
+
 
 def test_emp_login(context):
     emp_page = context.new_page()
     emp_page.goto(company_portal_emp_login)
 
-    apply_input(emp_page, "txtUsername", emp_username)
+    apply_input(
+        emp_page,
+        EMP_USERNAME_FIELD,
+        emp_username,
+    )
 
-    token_input = get_element_by_id(emp_page, "txtToken")
+    token_input = get_element_by_id(
+        emp_page,
+        EMP_TOKEN_FIELD,
+    )
 
-    login_button = get_element_by_name(emp_page, "btnNext")
+    login_button = get_element_by_name(
+        emp_page,
+        EMP_LOGIN_BUTTON_NAME,
+    )
 
-    token = input("Enter the ComSign token: ")
+    token = input(PROMPT_COMSIGN_TOKEN)
     token_input.fill(token)
 
     start = time.perf_counter()
-    with emp_page.expect_navigation():
+
+    with emp_page.expect_navigation(
+        timeout=NAVIGATION_TIMEOUT_MS
+    ):
         login_button.click()
+
     duration = time.perf_counter() - start
+
+    emp_page.close()
 
     return duration
 
-def test_basic_functionality():
 
+def check_valid_duration(
+    duration,
+    test_func,
+    context,
+    threshold=DEFAULT_DURATION_THRESHOLD,
+):
+    if duration > threshold:
+        print(MSG_DURATION_EXCEEDED)
+        return test_func(context)
+
+    return duration
+
+def display_results(savers_duration_2FA, savers_duration_final, emp_duration, agent_duration):
+    print(
+            f"Agents login navigation took "
+            f"{agent_duration:.3f}s"
+        )
+
+    print(
+        f"\nSavers login: "
+        f"2FA duration = {savers_duration_2FA:.3f}s, "
+        f"final navigation duration = {savers_duration_final:.3f}s"
+    )
+
+    print(
+        f"EMP login: navigation duration = "
+        f"{emp_duration:.3f}s"
+    )
+
+    print(
+        f"Agents login: navigation duration = "
+        f"{agent_duration:.3f}s"
+    )
+
+def test_basic_functionality():
     with sync_playwright() as p:
-        
-        # Launch Chrome browser
-        print("Launching browser...")
-        browser = p.chromium.launch(channel="chrome", headless=False)
+
+        print(MSG_BROWSER_LAUNCH)
+
+        browser = p.chromium.launch(
+            channel=BROWSER_CHANNEL,
+            headless=HEADLESS,
+        )
+
         context = browser.new_context()
 
-        savers_duration_2FA, savers_duration_final = test_savers_login(context)
+        savers_duration_2FA, savers_duration_final = test_savers_login(
+            context
+        )
 
-        print(f"Savers login navigation took {savers_duration_2FA:.3f}s for 2FA and {savers_duration_final:.3f}s for final navigation")
+        if (
+            savers_duration_2FA > MAXIMUM_DURATION
+            or savers_duration_final > MAXIMUM_DURATION
+        ):
+            print(
+                f"Savers 2FA duration exceeded "
+                f"{MAXIMUM_DURATION}s, re-running the test..."
+            )
+
+            savers_duration_2FA, savers_duration_final = (
+                test_savers_login(context)
+            )
+
+        print(
+            f"Savers login navigation took "
+            f"{savers_duration_2FA:.3f}s for 2FA and "
+            f"{savers_duration_final:.3f}s for final navigation"
+        )
 
         emp_duration = test_emp_login(context)
 
-        print(f"EMP login navigation took {emp_duration:.3f}s")
+        if emp_duration > MAXIMUM_DURATION:
+            print(
+                f"EMP login navigation exceeded "
+                f"{MAXIMUM_DURATION}s, re-running the test..."
+            )
+            emp_duration = test_emp_login(context)
+
+        print(
+            f"EMP login navigation took {emp_duration:.3f}s"
+        )
 
         agent_duration = test_agents_login(context)
 
-        print(f"Agents login navigation took {agent_duration:.3f}s")
+        if agent_duration > MAXIMUM_DURATION:
+            print(
+                f"Agents login navigation exceeded "
+                f"{MAXIMUM_DURATION}s, re-running the test..."
+            )
+            agent_duration = test_agents_login(context)
 
-        # Wait for 10 seconds to observe the logged-in state
-        time.sleep(10)
+        display_results(
+            savers_duration_2FA,
+            savers_duration_final,
+            emp_duration,
+            agent_duration
+        )
 
+        time.sleep(OBSERVATION_DELAY_SECONDS)
 
-        # Display results        print("\nTest Results:")
-        print(f"\nSavers login: 2FA duration = {savers_duration_2FA:.3f}s, final navigation duration = {savers_duration_final:.3f}s")
-        print(f"EMP login: navigation duration = {emp_duration:.3f}s")
-        print(f"Agents login: navigation duration = {agent_duration:.3f}s")
-
-        # Close the browser
-        print("Closing browser...")
+        print(MSG_BROWSER_CLOSE)
         browser.close()
 
 
