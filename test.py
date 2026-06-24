@@ -1,5 +1,4 @@
 # Script for testing the basic functionality needed for the project
-
 import os
 import time
 
@@ -12,7 +11,8 @@ from utils import (
     get_element_by_name,
     get_element_by_text,
     get_input_by_id,
-    two_fa_code_is_valid,
+    parse_args,
+    code_is_valid,
 )
 
 # ============================================================================
@@ -23,7 +23,6 @@ from configs import (
     BROWSER_CHANNEL,
     HEADLESS,
     OBSERVATION_DELAY_SECONDS,
-    NAVIGATION_TIMEOUT_MS,
     DEFAULT_DURATION_THRESHOLD,
     SAVERS_SMS_BUTTON_TEXT,
     SAVERS_CONTINUE_BUTTON_TEXT,
@@ -41,6 +40,7 @@ from configs import (
     PROMPT_2FA_RECEIVED,
     PROMPT_2FA_CODE,
     PROMPT_INVALID_2FA,
+    PROMPT_INVALID_TOKEN,
     PROMPT_COMSIGN_TOKEN,
     MSG_BROWSER_LAUNCH,
     MSG_BROWSER_CLOSE,
@@ -88,7 +88,7 @@ def test_savers_login(context):
 
     two_fa_code = input(PROMPT_2FA_CODE)
 
-    while not two_fa_code_is_valid(two_fa_code):
+    while not code_is_valid(two_fa_code):
         print(PROMPT_INVALID_2FA)
         two_fa_code = input(PROMPT_2FA_CODE)
 
@@ -138,13 +138,16 @@ def test_agents_login(context):
     )
 
     token = input(PROMPT_COMSIGN_TOKEN)
+
+    while not code_is_valid(token):
+        print(PROMPT_INVALID_TOKEN)
+        token = input(PROMPT_COMSIGN_TOKEN)
+
     token_input.fill(token)
 
     start = time.perf_counter()
 
-    with agents_page.expect_navigation(
-        timeout=NAVIGATION_TIMEOUT_MS
-    ):
+    with agents_page.expect_navigation():
         login_button.click()
 
     duration = time.perf_counter() - start
@@ -175,13 +178,16 @@ def test_emp_login(context):
     )
 
     token = input(PROMPT_COMSIGN_TOKEN)
+
+    while not code_is_valid(token):
+        print(PROMPT_INVALID_TOKEN)
+        token = input(PROMPT_COMSIGN_TOKEN)
+
     token_input.fill(token)
 
     start = time.perf_counter()
 
-    with emp_page.expect_navigation(
-        timeout=NAVIGATION_TIMEOUT_MS
-    ):
+    with emp_page.expect_navigation():
         login_button.click()
 
     duration = time.perf_counter() - start
@@ -226,6 +232,15 @@ def display_results(savers_duration_2FA, savers_duration_final, emp_duration, ag
     )
 
 def test_basic_functionality():
+    args = parse_args()
+
+    # If no flags were provided, run everything
+    run_all = not any([
+        args.emp,
+        args.save,
+        args.agents,
+    ])
+
     with sync_playwright() as p:
 
         print(MSG_BROWSER_LAUNCH)
@@ -237,63 +252,104 @@ def test_basic_functionality():
 
         context = browser.new_context()
 
-        savers_duration_2FA, savers_duration_final = test_savers_login(
-            context
-        )
+        savers_duration_2FA = None
+        savers_duration_final = None
+        emp_duration = None
+        agent_duration = None
 
-        if (
-            savers_duration_2FA > MAXIMUM_DURATION
-            or savers_duration_final > MAXIMUM_DURATION
-        ):
-            print(
-                f"Savers 2FA duration exceeded "
-                f"{MAXIMUM_DURATION}s, re-running the test..."
-            )
-
+        # =========================
+        # Savers
+        # =========================
+        if run_all or args.save:
             savers_duration_2FA, savers_duration_final = (
                 test_savers_login(context)
             )
 
-        print(
-            f"Savers login navigation took "
-            f"{savers_duration_2FA:.3f}s for 2FA and "
-            f"{savers_duration_final:.3f}s for final navigation"
-        )
+            if (
+                savers_duration_2FA > MAXIMUM_DURATION
+                or savers_duration_final > MAXIMUM_DURATION
+            ):
+                print(
+                    f"Savers 2FA duration exceeded "
+                    f"{MAXIMUM_DURATION}s, re-running the test..."
+                )
 
-        emp_duration = test_emp_login(context)
+                savers_duration_2FA, savers_duration_final = (
+                    test_savers_login(context)
+                )
 
-        if emp_duration > MAXIMUM_DURATION:
             print(
-                f"EMP login navigation exceeded "
-                f"{MAXIMUM_DURATION}s, re-running the test..."
+                f"Savers login navigation took "
+                f"{savers_duration_2FA:.3f}s for 2FA and "
+                f"{savers_duration_final:.3f}s for final navigation"
             )
+
+        # =========================
+        # EMP
+        # =========================
+        if run_all or args.emp:
             emp_duration = test_emp_login(context)
 
-        print(
-            f"EMP login navigation took {emp_duration:.3f}s"
-        )
+            if emp_duration > MAXIMUM_DURATION:
+                print(
+                    f"EMP login navigation exceeded "
+                    f"{MAXIMUM_DURATION}s, re-running the test..."
+                )
+                emp_duration = test_emp_login(context)
 
-        agent_duration = test_agents_login(context)
-
-        if agent_duration > MAXIMUM_DURATION:
             print(
-                f"Agents login navigation exceeded "
-                f"{MAXIMUM_DURATION}s, re-running the test..."
+                f"EMP login navigation took "
+                f"{emp_duration:.3f}s"
             )
+
+        # =========================
+        # Agents
+        # =========================
+        if run_all or args.agents:
             agent_duration = test_agents_login(context)
 
-        display_results(
-            savers_duration_2FA,
-            savers_duration_final,
-            emp_duration,
-            agent_duration
-        )
+            if agent_duration > MAXIMUM_DURATION:
+                print(
+                    f"Agents login navigation exceeded "
+                    f"{MAXIMUM_DURATION}s, re-running the test..."
+                )
+                agent_duration = test_agents_login(context)
+
+            print(
+                f"Agents login navigation took "
+                f"{agent_duration:.3f}s"
+            )
+
+        # Display only executed tests
+        print("\n=== Results ===")
+
+        if (
+            savers_duration_2FA is not None
+            and savers_duration_final is not None
+        ):
+            print(
+                f"Savers login: "
+                f"2FA duration = {savers_duration_2FA:.3f}s, "
+                f"final navigation duration = "
+                f"{savers_duration_final:.3f}s"
+            )
+
+        if agent_duration is not None:
+            print(
+                f"Agents login navigation took "
+                f"{agent_duration:.3f}s"
+            )
+
+        if emp_duration is not None:
+            print(
+                f"EMP login: navigation duration = "
+                f"{emp_duration:.3f}s"
+            )
 
         time.sleep(OBSERVATION_DELAY_SECONDS)
 
         print(MSG_BROWSER_CLOSE)
         browser.close()
-
 
 if __name__ == "__main__":
     test_basic_functionality()

@@ -44,6 +44,7 @@ PROMPT_PHONE_READY = (
 PROMPT_2FA_RECEIVED = "Press Enter when you receive the 2FA code..."
 PROMPT_2FA_CODE = "Enter the 2FA code: "
 PROMPT_INVALID_2FA = "Invalid 2FA code, please try again."
+PROMPT_INVALID_TOKEN = "Invalid ComSign token, please try again."
 PROMPT_COMSIGN_TOKEN = "Enter the ComSign token: "
 
 # Messages

@@ -1,4 +1,5 @@
 import time
+import argparse
 
 def get_element_by_id(page, element_id):
     """
@@ -118,5 +119,33 @@ def click_element(page, id, delay=0.5, component_timeout_ms=10000):
     time.sleep(delay)  # Small delay after click
     return element
 
-def two_fa_code_is_valid(code):
+def code_is_valid(code):
     return code.isdigit() and len(code) == 6
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Run portal login tests"
+    )
+
+    parser.add_argument(
+        "-emp",
+        "--emp",
+        action="store_true",
+        help="Run EMP test",
+    )
+
+    parser.add_argument(
+        "-save",
+        "--save",
+        action="store_true",
+        help="Run Savers test",
+    )
+
+    parser.add_argument(
+        "-agents",
+        "--agents",
+        action="store_true",
+        help="Run Agents test",
+    )
+
+    return parser.parse_args()
