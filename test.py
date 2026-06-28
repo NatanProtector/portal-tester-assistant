@@ -64,6 +64,7 @@ emp_username = os.getenv("EMP_USERNAME")
 
 
 def test_savers_login(context):
+    print("Testing Savers Page")
     savers_page = context.new_page()
     savers_page.goto(company_portal_savers_login)
 
@@ -113,6 +114,8 @@ def test_savers_login(context):
 
 
 def test_agents_login(context):
+    print("Testing Agents Page")
+
     agents_page = context.new_page()
     agents_page.goto(company_portal_agents_login)
 
@@ -158,6 +161,7 @@ def test_agents_login(context):
 
 
 def test_emp_login(context):
+    print("Testing Employers Page")
     emp_page = context.new_page()
     emp_page.goto(company_portal_emp_login)
 
