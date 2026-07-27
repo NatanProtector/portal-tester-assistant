@@ -3,7 +3,10 @@ import os
 import time
 
 from dotenv import load_dotenv
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import (
+    sync_playwright,
+    TimeoutError as PlaywrightTimeoutError,
+)
 
 from utils import (
     apply_input,
@@ -19,11 +22,9 @@ from utils import (
 # Constants
 # ============================================================================
 from configs import (
-    MAXIMUM_DURATION,
     BROWSER_CHANNEL,
     HEADLESS,
     OBSERVATION_DELAY_SECONDS,
-    DEFAULT_DURATION_THRESHOLD,
     SAVERS_SMS_BUTTON_TEXT,
     SAVERS_CONTINUE_BUTTON_TEXT,
     SAVERS_ID_FIELD,
@@ -44,7 +45,7 @@ from configs import (
     PROMPT_COMSIGN_TOKEN,
     MSG_BROWSER_LAUNCH,
     MSG_BROWSER_CLOSE,
-    MSG_DURATION_EXCEEDED,
+    NAVIGATION_TIMEOUT_MS
 )
 # ============================================================================
 
@@ -63,155 +64,177 @@ company_portal_emp_login = os.getenv("COMPANY_PORTAL_EMP_LOGIN")
 emp_username = os.getenv("EMP_USERNAME")
 
 
+def run_test_with_retry(test_name, test_function, context):
+    while True:
+        try:
+            return test_function(context)
+        except PlaywrightTimeoutError:
+            print(
+                f"{test_name} timed out after "
+                f"{NAVIGATION_TIMEOUT_MS}ms."
+            )
+
+            retry = input("Retry the test? (y/n): ").strip().lower()
+
+            while retry not in ["y", "yes", "n", "no"]:
+                if retry in ["y", "yes"]:
+                    continue
+
+            raise
+
+
 def test_savers_login(context):
     print("Testing Savers Page")
     savers_page = context.new_page()
-    savers_page.goto(company_portal_savers_login)
+    savers_page.set_default_navigation_timeout(NAVIGATION_TIMEOUT_MS)
+    savers_page.set_default_timeout(NAVIGATION_TIMEOUT_MS)
 
-    get_element_by_text(savers_page, SAVERS_SMS_BUTTON_TEXT).click()
+    try:
+        savers_page.goto(company_portal_savers_login)
 
-    apply_input(savers_page, SAVERS_ID_FIELD, savers_id)
-    apply_input(savers_page, SAVERS_PHONE_FIELD, savers_telephone)
+        get_element_by_text(savers_page, SAVERS_SMS_BUTTON_TEXT).click()
 
-    login_button = get_element_by_text(
-        savers_page,
-        SAVERS_CONTINUE_BUTTON_TEXT,
-    )
+        apply_input(savers_page, SAVERS_ID_FIELD, savers_id)
+        apply_input(savers_page, SAVERS_PHONE_FIELD, savers_telephone)
 
-    input(PROMPT_PHONE_READY)
+        login_button = get_element_by_text(
+            savers_page,
+            SAVERS_CONTINUE_BUTTON_TEXT,
+        )
 
-    start = time.perf_counter()
-    login_button.click()
+        input(PROMPT_PHONE_READY)
 
-    input(PROMPT_2FA_RECEIVED)
+        login_button.click()
+        start = time.perf_counter()
 
-    two_fa_duration = time.perf_counter() - start
+        input(PROMPT_2FA_RECEIVED)
 
-    two_fa_code = input(PROMPT_2FA_CODE)
+        two_fa_duration = time.perf_counter() - start
 
-    while not code_is_valid(two_fa_code):
-        print(PROMPT_INVALID_2FA)
         two_fa_code = input(PROMPT_2FA_CODE)
 
-    otp_inputs = [
-        get_input_by_id(savers_page, input_id)
-        for input_id in SAVERS_2FA_INPUT_IDS
-    ]
+        while not code_is_valid(two_fa_code):
+            print(PROMPT_INVALID_2FA)
+            two_fa_code = input(PROMPT_2FA_CODE)
 
-    for index, otp_input in enumerate(otp_inputs[:-1]):
-        otp_input.fill(two_fa_code[index])
+        otp_inputs = [
+            get_input_by_id(savers_page, input_id)
+            for input_id in SAVERS_2FA_INPUT_IDS
+        ]
 
-    start = time.perf_counter()
+        for index, otp_input in enumerate(otp_inputs[:-1]):
+            otp_input.fill(two_fa_code[index])
 
-    with savers_page.expect_navigation():
-        otp_inputs[-1].fill(two_fa_code[-1])
-        
-    duration = time.perf_counter() - start
+        start = time.perf_counter()
 
-    savers_page.close()
+        with savers_page.expect_navigation():
+            otp_inputs[-1].fill(two_fa_code[-1])
+            
+        duration = time.perf_counter() - start
 
-    return two_fa_duration, duration
+        return two_fa_duration, duration
+
+    finally:
+        savers_page.close()
 
 
 def test_agents_login(context):
     print("Testing Agents Page")
 
     agents_page = context.new_page()
-    agents_page.goto(company_portal_agents_login)
+    agents_page.set_default_navigation_timeout(NAVIGATION_TIMEOUT_MS)
+    agents_page.set_default_timeout(NAVIGATION_TIMEOUT_MS)
 
-    apply_input(
-        agents_page,
-        AGENTS_USERNAME_FIELD,
-        agents_username,
-    )
-    apply_input(
-        agents_page,
-        AGENTS_PASSWORD_FIELD,
-        agents_password,
-    )
+    try:
+        agents_page.goto(company_portal_agents_login)
 
-    token_input = get_element_by_id(
-        agents_page,
-        AGENTS_TOKEN_FIELD,
-    )
+        apply_input(
+            agents_page,
+            AGENTS_USERNAME_FIELD,
+            agents_username,
+        )
+        apply_input(
+            agents_page,
+            AGENTS_PASSWORD_FIELD,
+            agents_password,
+        )
 
-    login_button = get_element_by_id(
-        agents_page,
-        AGENTS_LOGIN_BUTTON_ID,
-    )
+        token_input = get_element_by_id(
+            agents_page,
+            AGENTS_TOKEN_FIELD,
+        )
 
-    token = input(PROMPT_COMSIGN_TOKEN)
+        login_button = get_element_by_id(
+            agents_page,
+            AGENTS_LOGIN_BUTTON_ID,
+        )
 
-    while not code_is_valid(token):
-        print(PROMPT_INVALID_TOKEN)
         token = input(PROMPT_COMSIGN_TOKEN)
 
-    token_input.fill(token)
+        while not code_is_valid(token):
+            print(PROMPT_INVALID_TOKEN)
+            token = input(PROMPT_COMSIGN_TOKEN)
 
-    start = time.perf_counter()
+        token_input.fill(token)
 
-    with agents_page.expect_navigation():
-        login_button.click()
+        start = time.perf_counter()
 
-    duration = time.perf_counter() - start
+        with agents_page.expect_navigation():
+            login_button.click()
 
-    agents_page.close()
+        duration = time.perf_counter() - start
 
-    return duration
+        return duration
+
+    finally:
+        agents_page.close()
 
 
 def test_emp_login(context):
     print("Testing Employers Page")
     emp_page = context.new_page()
-    emp_page.goto(company_portal_emp_login)
+    emp_page.set_default_navigation_timeout(NAVIGATION_TIMEOUT_MS)
+    emp_page.set_default_timeout(NAVIGATION_TIMEOUT_MS)
 
-    apply_input(
-        emp_page,
-        EMP_USERNAME_FIELD,
-        emp_username,
-    )
+    try:
+        emp_page.goto(company_portal_emp_login)
 
-    token_input = get_element_by_id(
-        emp_page,
-        EMP_TOKEN_FIELD,
-    )
+        apply_input(
+            emp_page,
+            EMP_USERNAME_FIELD,
+            emp_username,
+        )
 
-    login_button = get_element_by_name(
-        emp_page,
-        EMP_LOGIN_BUTTON_NAME,
-    )
+        token_input = get_element_by_id(
+            emp_page,
+            EMP_TOKEN_FIELD,
+        )
 
-    token = input(PROMPT_COMSIGN_TOKEN)
+        login_button = get_element_by_name(
+            emp_page,
+            EMP_LOGIN_BUTTON_NAME,
+        )
 
-    while not code_is_valid(token):
-        print(PROMPT_INVALID_TOKEN)
         token = input(PROMPT_COMSIGN_TOKEN)
 
-    token_input.fill(token)
+        while not code_is_valid(token):
+            print(PROMPT_INVALID_TOKEN)
+            token = input(PROMPT_COMSIGN_TOKEN)
 
-    start = time.perf_counter()
+        token_input.fill(token)
 
-    with emp_page.expect_navigation():
-        login_button.click()
+        start = time.perf_counter()
 
-    duration = time.perf_counter() - start
+        with emp_page.expect_navigation():
+            login_button.click()
 
-    emp_page.close()
+        duration = time.perf_counter() - start
 
-    return duration
+        return duration
 
+    finally:
+        emp_page.close()
 
-def check_valid_duration(
-    duration,
-    test_func,
-    context,
-    threshold=DEFAULT_DURATION_THRESHOLD,
-):
-    if duration > threshold:
-        print(MSG_DURATION_EXCEEDED)
-        return test_func(context)
-
-    return duration
 
 def display_results(savers_duration_2FA, savers_duration_final, emp_duration, agent_duration):
     print(
@@ -266,21 +289,12 @@ def test_basic_functionality():
         # =========================
         if run_all or args.save:
             savers_duration_2FA, savers_duration_final = (
-                test_savers_login(context)
+                run_test_with_retry(
+                    "Savers login",
+                    test_savers_login,
+                    context,
+                )
             )
-
-            if (
-                savers_duration_2FA > MAXIMUM_DURATION
-                or savers_duration_final > MAXIMUM_DURATION
-            ):
-                print(
-                    f"Savers 2FA duration exceeded "
-                    f"{MAXIMUM_DURATION}s, re-running the test..."
-                )
-
-                savers_duration_2FA, savers_duration_final = (
-                    test_savers_login(context)
-                )
 
             print(
                 f"Savers login navigation took "
@@ -292,14 +306,11 @@ def test_basic_functionality():
         # EMP
         # =========================
         if run_all or args.emp:
-            emp_duration = test_emp_login(context)
-
-            if emp_duration > MAXIMUM_DURATION:
-                print(
-                    f"EMP login navigation exceeded "
-                    f"{MAXIMUM_DURATION}s, re-running the test..."
-                )
-                emp_duration = test_emp_login(context)
+            emp_duration = run_test_with_retry(
+                "EMP login",
+                test_emp_login,
+                context,
+            )
 
             print(
                 f"EMP login navigation took "
@@ -310,14 +321,11 @@ def test_basic_functionality():
         # Agents
         # =========================
         if run_all or args.agents:
-            agent_duration = test_agents_login(context)
-
-            if agent_duration > MAXIMUM_DURATION:
-                print(
-                    f"Agents login navigation exceeded "
-                    f"{MAXIMUM_DURATION}s, re-running the test..."
-                )
-                agent_duration = test_agents_login(context)
+            agent_duration = run_test_with_retry(
+                "Agents login",
+                test_agents_login,
+                context,
+            )
 
             print(
                 f"Agents login navigation took "
