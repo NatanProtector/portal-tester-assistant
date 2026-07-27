@@ -1,4 +1,5 @@
 # Script for testing the basic functionality needed for the project
+import math
 import os
 import time
 from openpyxl import Workbook, load_workbook
@@ -7,7 +8,6 @@ from playwright.sync_api import (
     sync_playwright,
     TimeoutError as PlaywrightTimeoutError,
 )
-
 from utils import (
     apply_input,
     get_element_by_id,
@@ -48,7 +48,6 @@ from configs import (
     NAVIGATION_TIMEOUT_MS,
     STARTING_ROW,
     STARTING_COL,
-    ADDRESS_XL_FILE,
 )
 # ============================================================================
 
@@ -66,6 +65,25 @@ agents_password = os.getenv("AGENTS_PASSWORD")
 company_portal_emp_login = os.getenv("COMPANY_PORTAL_EMP_LOGIN")
 emp_username = os.getenv("EMP_USERNAME")
 
+address_xl_file = os.getenv("ADDRESS_XL_FILE")
+
+
+def duration_to_seconds(duration):
+    return math.floor(float(duration))
+
+
+def format_duration_for_xl(duration):
+    total_seconds = duration_to_seconds(duration)
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+
+def duration_to_excel_time(duration):
+    return duration_to_seconds(duration) / 86400
+
 
 def write_results_to_xl(*durations):
 
@@ -74,8 +92,10 @@ def write_results_to_xl(*durations):
     if not results:
         return
 
-    if os.path.exists(ADDRESS_XL_FILE):
-        workbook = load_workbook(ADDRESS_XL_FILE)
+    keep_vba = address_xl_file.lower().endswith(".xlsm")
+
+    if os.path.exists(address_xl_file):
+        workbook = load_workbook(address_xl_file, keep_vba=keep_vba)
     else:
         workbook = Workbook()
 
@@ -86,13 +106,14 @@ def write_results_to_xl(*durations):
         row += 1
 
     for offset, duration in enumerate(results):
-        sheet.cell(
+        cell = sheet.cell(
             row=row,
-            column=STARTING_COL + offset,
-            value=duration,
+            column=STARTING_COL - offset,
+            value=duration_to_excel_time(duration),
         )
+        cell.number_format = "hh:mm:ss"
 
-    workbook.save(ADDRESS_XL_FILE)
+    workbook.save(address_xl_file)
 
 
 def run_test_with_retry(test_name, test_function, context):
@@ -405,4 +426,4 @@ if __name__ == "__main__":
     # test_basic_functionality()
 
     # Testing the write_results_to_xl function
-    write_results_to_xl("2.5", "5.34", "3.21", "4.12")
+    write_results_to_xl("2.545", "12.334", "21.2341", "4.12")

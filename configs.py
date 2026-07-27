@@ -53,9 +53,5 @@ MSG_BROWSER_CLOSE = "Closing browser..."
 MSG_DURATION_EXCEEDED = "Duration exceeded threshold, re-running the test..."
 
 # writing to XL
-STARTING_ROW = 2
-STARTING_COL = 2
-
-# Get address from env file
-import os
-ADDRESS_XL_FILE = os.getenv("ADDRESS_XL_FILE")
+STARTING_ROW = 4
+STARTING_COL = 7
