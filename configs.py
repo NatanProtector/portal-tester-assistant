@@ -51,3 +51,11 @@ PROMPT_COMSIGN_TOKEN = "Enter the ComSign token: "
 MSG_BROWSER_LAUNCH = "Launching browser..."
 MSG_BROWSER_CLOSE = "Closing browser..."
 MSG_DURATION_EXCEEDED = "Duration exceeded threshold, re-running the test..."
+
+# writing to XL
+STARTING_ROW = 2
+STARTING_COL = 2
+
+# Get address from env file
+import os
+ADDRESS_XL_FILE = os.getenv("ADDRESS_XL_FILE")

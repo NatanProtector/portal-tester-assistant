@@ -1,7 +1,7 @@
 # Script for testing the basic functionality needed for the project
 import os
 import time
-
+from openpyxl import Workbook, load_workbook
 from dotenv import load_dotenv
 from playwright.sync_api import (
     sync_playwright,
@@ -45,7 +45,10 @@ from configs import (
     PROMPT_COMSIGN_TOKEN,
     MSG_BROWSER_LAUNCH,
     MSG_BROWSER_CLOSE,
-    NAVIGATION_TIMEOUT_MS
+    NAVIGATION_TIMEOUT_MS,
+    STARTING_ROW,
+    STARTING_COL,
+    ADDRESS_XL_FILE,
 )
 # ============================================================================
 
@@ -62,6 +65,34 @@ agents_password = os.getenv("AGENTS_PASSWORD")
 
 company_portal_emp_login = os.getenv("COMPANY_PORTAL_EMP_LOGIN")
 emp_username = os.getenv("EMP_USERNAME")
+
+
+def write_results_to_xl(*durations):
+
+    results = [duration for duration in durations if duration is not None]
+
+    if not results:
+        return
+
+    if os.path.exists(ADDRESS_XL_FILE):
+        workbook = load_workbook(ADDRESS_XL_FILE)
+    else:
+        workbook = Workbook()
+
+    sheet = workbook.active
+    row = STARTING_ROW
+
+    while sheet.cell(row=row, column=STARTING_COL).value is not None:
+        row += 1
+
+    for offset, duration in enumerate(results):
+        sheet.cell(
+            row=row,
+            column=STARTING_COL + offset,
+            value=duration,
+        )
+
+    workbook.save(ADDRESS_XL_FILE)
 
 
 def run_test_with_retry(test_name, test_function, context):
@@ -358,10 +389,20 @@ def test_basic_functionality():
                 f"{emp_duration:.3f}s"
             )
 
+        write_results_to_xl(
+            savers_duration_2FA,
+            savers_duration_final,
+            emp_duration,
+            agent_duration,
+        )
+
         time.sleep(OBSERVATION_DELAY_SECONDS)
 
         print(MSG_BROWSER_CLOSE)
         browser.close()
 
 if __name__ == "__main__":
-    test_basic_functionality()
+    # test_basic_functionality()
+
+    # Testing the write_results_to_xl function
+    write_results_to_xl("2.5", "5.34", "3.21", "4.12")
