@@ -87,9 +87,7 @@ def duration_to_excel_time(duration):
 
 def write_results_to_xl(*durations):
 
-    results = [duration for duration in durations if duration is not None]
-
-    if not results:
+    if all(duration is None for duration in durations):
         return
 
     keep_vba = address_xl_file.lower().endswith(".xlsm")
@@ -101,11 +99,21 @@ def write_results_to_xl(*durations):
 
     sheet = workbook.active
     row = STARTING_ROW
+    result_columns = [
+        STARTING_COL - offset
+        for offset in range(len(durations))
+    ]
 
-    while sheet.cell(row=row, column=STARTING_COL).value is not None:
+    while any(
+        sheet.cell(row=row, column=column).value is not None
+        for column in result_columns
+    ):
         row += 1
 
-    for offset, duration in enumerate(results):
+    for offset, duration in enumerate(durations):
+        if duration is None:
+            continue
+
         cell = sheet.cell(
             row=row,
             column=STARTING_COL - offset,
@@ -114,6 +122,8 @@ def write_results_to_xl(*durations):
         cell.number_format = "hh:mm:ss"
 
     workbook.save(address_xl_file)
+
+    os.startfile(address_xl_file)
 
 
 def run_test_with_retry(test_name, test_function, context):
@@ -129,10 +139,13 @@ def run_test_with_retry(test_name, test_function, context):
             retry = input("Retry the test? (y/n): ").strip().lower()
 
             while retry not in ["y", "yes", "n", "no"]:
-                if retry in ["y", "yes"]:
-                    continue
+                retry = input("Please enter y or n: ").strip().lower()
 
-            raise
+            if retry in ["y", "yes"]:
+                continue
+
+            print(f"Skipping {test_name}.")
+            return None
 
 
 def test_savers_login(context):
@@ -340,19 +353,20 @@ def test_basic_functionality():
         # Savers
         # =========================
         if run_all or args.save:
-            savers_duration_2FA, savers_duration_final = (
-                run_test_with_retry(
-                    "Savers login",
-                    test_savers_login,
-                    context,
-                )
+            savers_result = run_test_with_retry(
+                "Savers login",
+                test_savers_login,
+                context,
             )
 
-            print(
-                f"Savers login navigation took "
-                f"{savers_duration_2FA:.3f}s for 2FA and "
-                f"{savers_duration_final:.3f}s for final navigation"
-            )
+            if savers_result is not None:
+                savers_duration_2FA, savers_duration_final = savers_result
+
+                print(
+                    f"Savers login navigation took "
+                    f"{savers_duration_2FA:.3f}s for 2FA and "
+                    f"{savers_duration_final:.3f}s for final navigation"
+                )
 
         # =========================
         # EMP
@@ -364,10 +378,11 @@ def test_basic_functionality():
                 context,
             )
 
-            print(
-                f"EMP login navigation took "
-                f"{emp_duration:.3f}s"
-            )
+            if emp_duration is not None:
+                print(
+                    f"EMP login navigation took "
+                    f"{emp_duration:.3f}s"
+                )
 
         # =========================
         # Agents
@@ -379,10 +394,11 @@ def test_basic_functionality():
                 context,
             )
 
-            print(
-                f"Agents login navigation took "
-                f"{agent_duration:.3f}s"
-            )
+            if agent_duration is not None:
+                print(
+                    f"Agents login navigation took "
+                    f"{agent_duration:.3f}s"
+                )
 
         # Display only executed tests
         print("\n=== Results ===")
@@ -423,7 +439,7 @@ def test_basic_functionality():
         browser.close()
 
 if __name__ == "__main__":
-    # test_basic_functionality()
+    test_basic_functionality()
 
     # Testing the write_results_to_xl function
-    write_results_to_xl("2.545", "12.334", "21.2341", "4.12")
+    # write_results_to_xl("2.545", "12.334", "21.2341", "4.12")
