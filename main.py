@@ -427,8 +427,8 @@ def test_basic_functionality():
             )
 
         write_results_to_xl(
-            savers_duration_2FA,
             savers_duration_final,
+            savers_duration_2FA,
             emp_duration,
             agent_duration,
         )
